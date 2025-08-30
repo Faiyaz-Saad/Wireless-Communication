@@ -93,7 +93,7 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "org.example.project"
+            packageName = "Wireless Communication"
             packageVersion = "1.0.0"
             includeAllModules = true
         }

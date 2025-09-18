@@ -1,7 +1,8 @@
-eeeeepackage org.example.project
+package org.example.project
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.exitApplication
 import chat.platform.platformHttpClient
 import chat.transport.KtorTransport
 import chat.ui.ChatScreen

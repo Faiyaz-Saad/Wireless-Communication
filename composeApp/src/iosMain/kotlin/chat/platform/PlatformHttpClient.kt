@@ -1,4 +1,4 @@
-package org.example.project
+package chat.platform
 
 import io.ktor.client.*
 import io.ktor.client.engine.darwin.*

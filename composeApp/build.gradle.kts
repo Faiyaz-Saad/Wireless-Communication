@@ -8,6 +8,7 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.composeHotReload)
+    id("org.jetbrains.kotlin.plugin.serialization") version "2.2.0" // Serialization plugin
 }
 
 kotlin {
@@ -33,25 +34,51 @@ kotlin {
     
     sourceSets {
         androidMain.dependencies {
+            // Compose for Android
             implementation(compose.preview)
             implementation(libs.androidx.activity.compose)
+            // Lifecycle - Android only
+            implementation(libs.androidx.lifecycle.viewmodelCompose)
+            implementation(libs.androidx.lifecycle.runtimeCompose)
+            /// Android client - using CIO engine for better WebSocket support
+            implementation("io.ktor:ktor-client-cio:2.3.12")
+            implementation("io.ktor:ktor-client-websockets:2.3.12")
+            // Android host/server
+            implementation("io.ktor:ktor-server-cio:2.3.12")
+            implementation("io.ktor:ktor-server-websockets:2.3.12")
         }
         commonMain.dependencies {
+            //Previous dependencies
             implementation(compose.runtime)
             implementation(compose.foundation)
             implementation(compose.material3)
             implementation(compose.ui)
             implementation(compose.components.resources)
             implementation(compose.components.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.viewmodelCompose)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
+            // Coroutines + Serialization
+            implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+            implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
+            // Ktor core client
+            implementation("io.ktor:ktor-client-core:2.3.12")
+        }
+        iosMain.dependencies {
+            // iOS specific client
+            implementation("io.ktor:ktor-client-darwin:2.3.12")
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
         jvmMain.dependencies {
+            // Compose Desktop
             implementation(compose.desktop.currentOs)
             implementation(libs.kotlinx.coroutinesSwing)
+            // Desktop (Windows/Linux/Mac) specific client
+            implementation("io.ktor:ktor-client-cio:2.3.12")
+            // Ktor Server dependencies for desktop
+            implementation("io.ktor:ktor-server-netty:2.3.12")
+            implementation("io.ktor:ktor-server-websockets:2.3.12")
+            implementation("io.ktor:ktor-server-core:2.3.12")
+            implementation("io.ktor:ktor-server-host-common:2.3.12")
         }
     }
 }

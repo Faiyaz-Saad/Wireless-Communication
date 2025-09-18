@@ -16,6 +16,7 @@ pluginManagement {
 }
 
 dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         google {
             mavenContent {
@@ -29,6 +30,7 @@ dependencyResolutionManagement {
 }
 
 plugins {
+    // JVM toolchain resolver (auto-download JDKs)
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 

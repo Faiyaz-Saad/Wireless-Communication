@@ -1,0 +1,13 @@
+# Wireless Communication Desktop App Aliases
+# Add this to your ~/.bashrc or source it directly
+
+alias start-desktop='cd "/mnt/CODING ZONE/ProjectForUniversityLab /ProductPurchasing" && ./start-desktop-auto.sh'
+alias stop-desktop='cd "/mnt/CODING ZONE/ProjectForUniversityLab /ProductPurchasing" && ./stop-desktop.sh'
+alias status-desktop='cd "/mnt/CODING ZONE/ProjectForUniversityLab /ProductPurchasing" && ./status-desktop.sh'
+alias restart-desktop='cd "/mnt/CODING ZONE/ProjectForUniversityLab /ProductPurchasing" && ./stop-desktop.sh && sleep 2 && ./start-desktop-auto.sh'
+
+# Usage:
+# start-desktop    - Start the desktop app (auto-handles conflicts)
+# stop-desktop     - Stop the desktop app
+# status-desktop   - Check if app is running
+# restart-desktop  - Stop and start the app

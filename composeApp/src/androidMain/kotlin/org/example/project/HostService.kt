@@ -32,6 +32,7 @@ class HostService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var server: ApplicationEngine? = null
     private var broadcasterScope: CoroutineScope? = null
+    private val connectedClients = mutableSetOf<DefaultWebSocketServerSession>()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -49,14 +50,36 @@ class HostService : Service() {
                         install(WebSockets)
                         routing {
                             webSocket("/ws") {
+                                println("Client connected to Android server")
+                                connectedClients.add(this)
                                 try {
                                     for (frame in incoming) {
                                         if (frame is Frame.Text) {
                                             val msg = frame.readText()
-                                            send(Frame.Text(msg))
+                                            println("Android server received: $msg")
+                                            
+                                            // Broadcast to all connected clients except sender
+                                            val deadClients = mutableSetOf<DefaultWebSocketServerSession>()
+                                            connectedClients.forEach { client ->
+                                                try {
+                                                    if (client != this) {
+                                                        client.send(Frame.Text(msg))
+                                                    }
+                                                } catch (e: Exception) {
+                                                    println("Error sending to client: ${e.message}")
+                                                    deadClients.add(client)
+                                                }
+                                            }
+                                            // Remove dead clients
+                                            connectedClients.removeAll(deadClients)
                                         }
                                     }
-                                } catch (_: Throwable) {}
+                                } catch (e: Exception) {
+                                    println("WebSocket error: ${e.message}")
+                                } finally {
+                                    connectedClients.remove(this)
+                                    println("Client disconnected from Android server")
+                                }
                             }
                         }
                     }.start(false)

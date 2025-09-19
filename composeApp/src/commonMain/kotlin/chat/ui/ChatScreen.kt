@@ -34,7 +34,10 @@ fun ChatScreen(transport: ChatTransport, me: String, onPickImage: suspend () -> 
             when (env) {
                 is Envelope.Msg -> {
                     println("Adding message to UI: ${env.message}")
-                    messages.add(env.message)
+                    // Only add if not already present (avoid duplicates from echo)
+                    if (!messages.any { it.id == env.message.id }) {
+                        messages.add(env.message)
+                    }
                 }
                 else -> {
                     println("Received other envelope type: ${env::class.simpleName}")
@@ -90,8 +93,9 @@ fun ChatScreen(transport: ChatTransport, me: String, onPickImage: suspend () -> 
                                 from = me,
                                 text = text
                             )
+                            // Add message to UI immediately for better UX
+                            messages.add(msg)
                             transport.send(Envelope.Msg(msg))
-                            // Don't add to messages here - let the incoming flow handle it
                         }
                     },
                     colors = ButtonDefaults.buttonColors(
@@ -113,8 +117,9 @@ fun ChatScreen(transport: ChatTransport, me: String, onPickImage: suspend () -> 
                                     from = me,
                                     imageBase64 = b64
                                 )
+                                // Add message to UI immediately for better UX
+                                messages.add(msg)
                                 transport.send(Envelope.Msg(msg))
-                                // Don't add to messages here - let the incoming flow handle it
                             }
                         } catch (e: Exception) {
                             // Handle any errors gracefully

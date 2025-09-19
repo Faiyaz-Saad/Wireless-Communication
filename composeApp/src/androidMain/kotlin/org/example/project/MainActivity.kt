@@ -32,6 +32,19 @@ import java.net.DatagramPacket
 import java.net.DatagramSocket
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.Flow
+import android.net.wifi.WifiManager
+import android.content.Context
+import io.ktor.server.application.*
+import io.ktor.server.engine.*
+import io.ktor.server.cio.*
+import io.ktor.server.routing.*
+import io.ktor.server.websocket.*
+import io.ktor.websocket.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
+import java.net.DatagramSocket
+import java.net.DatagramPacket
+import java.net.InetAddress
 import chat.model.Envelope
 
 class MainActivity : ComponentActivity() {
@@ -48,7 +61,7 @@ class MainActivity : ComponentActivity() {
             var connected by remember { mutableStateOf(false) }
             var errorMessage by remember { mutableStateOf<String?>(null) }
 
-            // Show UI based on connection state
+            // Host or Join controls
             if (connected) {
                 ChatScreen(
                     transport = transport,
@@ -83,7 +96,7 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
-                    // Try to connect in background
+                    // Try to connect in background (Join flow)
                     LaunchedEffect(Unit) {
                         val serverInfo = listenForServerBroadcast()
                         if (serverInfo != null) {
@@ -102,6 +115,65 @@ class MainActivity : ComponentActivity() {
                             errorMessage = "No server found on the network."
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    // Host button to start server on Android
+                    androidx.compose.material3.Button(onClick = {
+                        // Acquire multicast lock for discovery
+                        try {
+                            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                            val lock = wifi.createMulticastLock("wcwi-lock")
+                            lock.setReferenceCounted(true)
+                            lock.acquire()
+                        } catch (_: Throwable) {}
+
+                        // Start Android-hosted server
+                        val server = embeddedServer(CIO, port = 8765) {
+                            install(WebSockets)
+                            routing {
+                                webSocket("/ws") {
+                                    try {
+                                        for (frame in incoming) {
+                                            if (frame is Frame.Text) {
+                                                val msg = frame.readText()
+                                                // echo back for now; desktop and other phones will receive via broadcast
+                                                send(Frame.Text(msg))
+                                            }
+                                        }
+                                    } catch (_: Throwable) {}
+                                }
+                            }
+                        }
+                        server.start(false)
+
+                        // Start broadcaster
+                        val scope = CoroutineScope(SupervisorJob())
+                        scope.launch(Dispatchers.IO) {
+                            val message = "SERVER:8765"
+                            val socket = DatagramSocket()
+                            socket.broadcast = true
+                            val bytes = message.toByteArray()
+                            val addr = InetAddress.getByName("255.255.255.255")
+                            while (true) {
+                                try {
+                                    val p = DatagramPacket(bytes, bytes.size, addr, 8888)
+                                    socket.send(p)
+                                    kotlinx.coroutines.delay(2000)
+                                } catch (_: Throwable) { break }
+                            }
+                            socket.close()
+                        }
+
+                        // Connect self as client so host sees UI
+                        scope.launch {
+                            try {
+                                transport.startClient("127.0.0.1", 8765)
+                                connected = true
+                            } catch (e: Exception) {
+                                errorMessage = e.message
+                            }
+                        }
+                    }) { Text("Host on this device") }
                 }
             }
         }

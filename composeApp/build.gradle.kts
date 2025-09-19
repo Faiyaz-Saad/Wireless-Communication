@@ -43,7 +43,11 @@ kotlin {
             /// Android client - use OkHttp engine for stability
             implementation("io.ktor:ktor-client-okhttp:2.3.12")
             implementation("io.ktor:ktor-client-websockets:2.3.12")
-            // No server on Android
+            // Android host/server
+            implementation("io.ktor:ktor-server-cio:2.3.12")
+            implementation("io.ktor:ktor-server-websockets:2.3.12")
+            implementation("io.ktor:ktor-server-core:2.3.12")
+            implementation("io.ktor:ktor-server-host-common:2.3.12")
         }
         commonMain.dependencies {
             //Previous dependencies

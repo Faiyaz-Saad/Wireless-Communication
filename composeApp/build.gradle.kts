@@ -40,12 +40,10 @@ kotlin {
             // Lifecycle - Android only
             implementation(libs.androidx.lifecycle.viewmodelCompose)
             implementation(libs.androidx.lifecycle.runtimeCompose)
-            /// Android client - using CIO engine for better WebSocket support
-            implementation("io.ktor:ktor-client-cio:2.3.12")
+            /// Android client - use OkHttp engine for stability
+            implementation("io.ktor:ktor-client-okhttp:2.3.12")
             implementation("io.ktor:ktor-client-websockets:2.3.12")
-            // Android host/server
-            implementation("io.ktor:ktor-server-cio:2.3.12")
-            implementation("io.ktor:ktor-server-websockets:2.3.12")
+            // No server on Android
         }
         commonMain.dependencies {
             //Previous dependencies

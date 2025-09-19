@@ -9,6 +9,8 @@ import android.content.Intent
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
+import android.net.wifi.WifiManager
+import android.net.DhcpInfo
 import io.ktor.server.application.*
 import io.ktor.server.cio.*
 import io.ktor.server.engine.*
@@ -20,11 +22,16 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import java.net.DatagramPacket as JavaDatagramPacket
+import java.net.DatagramSocket as JavaDatagramSocket
+import java.net.InetAddress
 
 class HostService : Service() {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var server: ApplicationEngine? = null
+    private var broadcasterScope: CoroutineScope? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -38,7 +45,7 @@ class HostService : Service() {
         if (server == null) {
             serviceScope.launch {
                 try {
-                    server = embeddedServer(CIO, port = port, host = "127.0.0.1") {
+                    server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
                         install(WebSockets)
                         routing {
                             webSocket("/ws") {
@@ -53,6 +60,35 @@ class HostService : Service() {
                             }
                         }
                     }.start(false)
+
+                    // Acquire multicast lock and start UDP broadcaster for discovery
+                    val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+                    val lock = wifi.createMulticastLock("wcwi-lock-service").apply {
+                        setReferenceCounted(true)
+                        acquire()
+                    }
+                    broadcasterScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+                    broadcasterScope?.launch {
+                        val socket = JavaDatagramSocket()
+                        try {
+                            socket.broadcast = true
+                            val bytes = "SERVER:$port".toByteArray()
+                            val addr = getSubnetBroadcastAddress(applicationContext) ?: InetAddress.getByName("255.255.255.255")
+                            while (true) {
+                                try {
+                                    val p = JavaDatagramPacket(bytes, bytes.size, addr, 8888)
+                                    socket.send(p)
+                                } catch (_: Throwable) { /* ignore and continue */ }
+                                delay(2000)
+                            }
+                        } finally {
+                            try { socket.close() } catch (_: Throwable) {}
+                            if (lock.isHeld) try { lock.release() } catch (_: Throwable) {}
+                        }
+                    }
+
+                    // Update notification to show LAN IP
+                    updateNotificationWithIp(port)
                 } catch (_: Throwable) {
                     stopSelf()
                 }
@@ -64,6 +100,7 @@ class HostService : Service() {
     override fun onDestroy() {
         try { server?.stop(1000, 1000) } catch (_: Throwable) {}
         server = null
+        try { broadcasterScope?.cancel() } catch (_: Throwable) {}
         serviceScope.cancel()
         super.onDestroy()
     }
@@ -79,8 +116,34 @@ class HostService : Service() {
             .setOngoing(true)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentTitle("Hosting chat server")
-            .setContentText("Running on 127.0.0.1")
+            .setContentText("Starting…")
             .build()
+    }
+
+    private fun updateNotificationWithIp(port: Int) {
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val ip = getLocalIpAddress(this) ?: "127.0.0.1"
+        val notif = NotificationCompat.Builder(this, NOTIF_CHANNEL_ID)
+            .setOngoing(true)
+            .setSmallIcon(android.R.drawable.stat_sys_upload)
+            .setContentTitle("Hosting chat server")
+            .setContentText("Running on $ip:$port")
+            .build()
+        nm.notify(NOTIF_ID, notif)
+    }
+
+    private fun getLocalIpAddress(context: Context): String? {
+        return try {
+            val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val dhcp: DhcpInfo = wifi.dhcpInfo ?: return null
+            val ip = dhcp.ipAddress
+            if (ip == 0) return null
+            val quads = ByteArray(4)
+            for (k in 0..3) {
+                quads[k] = (ip shr (k * 8) and 0xFF).toByte()
+            }
+            InetAddress.getByAddress(quads).hostAddress
+        } catch (_: Throwable) { null }
     }
 
     companion object {

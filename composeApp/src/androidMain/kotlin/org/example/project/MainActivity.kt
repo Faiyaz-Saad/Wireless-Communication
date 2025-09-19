@@ -146,14 +146,20 @@ class MainActivity : ComponentActivity() {
                             applicationContext.startService(intent)
                         }
 
-                        // Connect self as client so host sees UI
+                        // Connect self as client with simple retry to avoid race with service start
                         uiScope.launch(Dispatchers.IO) {
-                            try {
-                                transport.startClient("127.0.0.1", serverPort)
-                                withContext(Dispatchers.Main) { connected = true }
-                            } catch (e: Exception) {
-                                withContext(Dispatchers.Main) { errorMessage = e.message }
+                            var lastError: String? = null
+                            repeat(5) { attempt ->
+                                try {
+                                    transport.startClient("127.0.0.1", serverPort)
+                                    withContext(Dispatchers.Main) { connected = true; errorMessage = null }
+                                    return@launch
+                                } catch (e: Exception) {
+                                    lastError = e.message
+                                    kotlinx.coroutines.delay(400L * (attempt + 1))
+                                }
                             }
+                            withContext(Dispatchers.Main) { errorMessage = "Failed to connect to 127.0.0.1:$serverPort: ${'$'}lastError" }
                         }
                     }) { Text("Host on this device") }
                 }

@@ -47,7 +47,11 @@ class HostService : Service() {
             serviceScope.launch {
                 try {
                     server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
-                        install(WebSockets)
+                        install(WebSockets) {
+                            pingPeriod = java.time.Duration.ofSeconds(15)
+                            timeout = java.time.Duration.ofSeconds(15)
+                            maxFrameSize = Long.MAX_VALUE
+                        }
                         routing {
                             webSocket("/ws") {
                                 println("Client connected to Android server")

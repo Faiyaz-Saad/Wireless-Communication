@@ -75,6 +75,8 @@ class MainActivity : ComponentActivity() {
             var errorMessage by remember { mutableStateOf<String?>(null) }
             val uiScope = rememberCoroutineScope()
             var serverStarted by remember { mutableStateOf(false) }
+            var manualHost by remember { mutableStateOf("") }
+            var showManualInput by remember { mutableStateOf(false) }
             val serverPort = 9876
 
             // Host or Join controls
@@ -114,25 +116,64 @@ class MainActivity : ComponentActivity() {
 
                     // Try to connect in background (Join flow)
                     LaunchedEffect(Unit) {
-                        val serverInfo = listenForServerBroadcast()
-                        if (serverInfo != null) {
-                            val (host, port) = serverInfo
-                            if (host != null) {
-                                try {
-                                    transport.startClient(host, port)
-                                    connected = true // Switch to ChatScreen
-                                } catch (e: Exception) {
-                                    errorMessage = "Connection error:  ${e.message}"
+                        try {
+                            val serverInfo = listenForServerBroadcast()
+                            if (serverInfo != null) {
+                                val (host, port) = serverInfo
+                                if (host != null) {
+                                    try {
+                                        transport.startClient(host, port)
+                                        connected = true // Switch to ChatScreen
+                                    } catch (e: Exception) {
+                                        errorMessage = "Connection error: ${e.message}"
+                                    }
+                                } else {
+                                    errorMessage = "Server host is null."
                                 }
                             } else {
-                                errorMessage = "Server host is null."
+                                errorMessage = "No server found on the network. Try hosting instead."
                             }
-                        } else {
-                            errorMessage = "No server found on the network."
+                        } catch (e: Exception) {
+                            errorMessage = "Discovery failed: ${e.message}"
                         }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
+                    
+                    // Manual connection option
+                    if (showManualInput) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            TextField(
+                                value = manualHost,
+                                onValueChange = { manualHost = it },
+                                label = { Text("Enter host IP (e.g., 192.168.1.100)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = {
+                                    if (manualHost.isNotBlank()) {
+                                        uiScope.launch(Dispatchers.IO) {
+                                            try {
+                                                transport.startClient(manualHost, serverPort)
+                                                withContext(Dispatchers.Main) { 
+                                                    connected = true
+                                                    errorMessage = null
+                                                }
+                                            } catch (e: Exception) {
+                                                withContext(Dispatchers.Main) { 
+                                                    errorMessage = "Failed to connect to $manualHost: ${e.message}"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }) { Text("Connect") }
+                                Button(onClick = { showManualInput = false }) { Text("Cancel") }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                    
                     // Host button to start server on Android (Foreground Service)
                     androidx.compose.material3.Button(onClick = {
                         // Ensure required runtime permissions first
@@ -186,6 +227,13 @@ class MainActivity : ComponentActivity() {
                             withContext(Dispatchers.Main) { errorMessage = "Failed to connect to 127.0.0.1:$serverPort: ${'$'}lastError" }
                         }
                     }) { Text("Host on this device") }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    // Manual connection button
+                    Button(onClick = { showManualInput = !showManualInput }) {
+                        Text(if (showManualInput) "Hide Manual Connection" else "Connect Manually")
+                    }
                 }
             }
         }

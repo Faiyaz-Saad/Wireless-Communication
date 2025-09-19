@@ -138,9 +138,9 @@ class MainActivity : ComponentActivity() {
                         serverStarted = true
 
                         uiScope.launch(Dispatchers.IO) {
-                            // Start Android-hosted server off main thread
+                            // Start Android-hosted server off main thread (bind to loopback)
                             try {
-                                val server = embeddedServer(CIO, port = serverPort) {
+                                val server = embeddedServer(CIO, port = serverPort, host = "127.0.0.1") {
                                     install(WebSockets)
                                     routing {
                                         webSocket("/ws") {
@@ -164,26 +164,7 @@ class MainActivity : ComponentActivity() {
                                 return@launch
                             }
 
-                            // Start broadcaster
-                            val bgScope = CoroutineScope(SupervisorJob())
-                            bgScope.launch(Dispatchers.IO) {
-                                val message = "SERVER:$serverPort"
-                                val socket = JavaDatagramSocket()
-                                try {
-                                    socket.broadcast = true
-                                    val bytes = message.toByteArray()
-                                    val addr = getSubnetBroadcastAddress(applicationContext) ?: InetAddress.getByName("255.255.255.255")
-                                    while (isActive) {
-                                        try {
-                                            val p = JavaDatagramPacket(bytes, bytes.size, addr, 8888)
-                                            socket.send(p)
-                                            kotlinx.coroutines.delay(2000)
-                                        } catch (_: Throwable) { break }
-                                    }
-                                } finally {
-                                    socket.close()
-                                }
-                            }
+                            // Broadcaster disabled in safe-mode to avoid OEM/network kills
 
                             // Connect self as client so host sees UI
                             try {

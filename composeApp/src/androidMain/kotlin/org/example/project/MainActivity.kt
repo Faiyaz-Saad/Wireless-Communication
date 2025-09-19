@@ -25,6 +25,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import chat.transport.ChatTransport
 import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
@@ -61,6 +62,7 @@ class MainActivity : ComponentActivity() {
             // State to track if connected and server info
             var connected by remember { mutableStateOf(false) }
             var errorMessage by remember { mutableStateOf<String?>(null) }
+            val uiScope = rememberCoroutineScope()
 
             // Host or Join controls
             if (connected) {
@@ -120,7 +122,7 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(24.dp))
                     // Host button to start server on Android
                     androidx.compose.material3.Button(onClick = {
-                        // Acquire multicast lock for discovery
+                        // Acquire multicast lock for discovery (main thread OK)
                         try {
                             val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
                             val lock = wifi.createMulticastLock("wcwi-lock")
@@ -128,50 +130,49 @@ class MainActivity : ComponentActivity() {
                             lock.acquire()
                         } catch (_: Throwable) {}
 
-                        // Start Android-hosted server
-                        val server = embeddedServer(CIO, port = 8765) {
-                            install(WebSockets)
-                            routing {
-                                webSocket("/ws") {
-                                    try {
-                                        for (frame in incoming) {
-                                            if (frame is Frame.Text) {
-                                                val msg = frame.readText()
-                                                // echo back for now; desktop and other phones will receive via broadcast
-                                                send(Frame.Text(msg))
+                        uiScope.launch(Dispatchers.IO) {
+                            // Start Android-hosted server off main thread
+                            val server = embeddedServer(CIO, port = 8765) {
+                                install(WebSockets)
+                                routing {
+                                    webSocket("/ws") {
+                                        try {
+                                            for (frame in incoming) {
+                                                if (frame is Frame.Text) {
+                                                    val msg = frame.readText()
+                                                    send(Frame.Text(msg))
+                                                }
                                             }
-                                        }
-                                    } catch (_: Throwable) {}
+                                        } catch (_: Throwable) {}
+                                    }
                                 }
                             }
-                        }
-                        server.start(false)
+                            server.start(false)
 
-                        // Start broadcaster
-                        val scope = CoroutineScope(SupervisorJob())
-                        scope.launch(Dispatchers.IO) {
-                            val message = "SERVER:8765" // Assuming 8765 is the server port
-                            val socket = JavaDatagramSocket()
-                            socket.broadcast = true
-                            val bytes = message.toByteArray()
-                            val addr = InetAddress.getByName("255.255.255.255")
-                            while (true) { // Keep broadcasting
-                                try {
-                                    val p = JavaDatagramPacket(bytes, bytes.size, addr, 8888)
-                                    socket.send(p)
-                                    kotlinx.coroutines.delay(2000)
-                                } catch (_: Throwable) { break }
+                            // Start broadcaster
+                            val bgScope = CoroutineScope(SupervisorJob())
+                            bgScope.launch(Dispatchers.IO) {
+                                val message = "SERVER:8765"
+                                val socket = JavaDatagramSocket()
+                                socket.broadcast = true
+                                val bytes = message.toByteArray()
+                                val addr = InetAddress.getByName("255.255.255.255")
+                                while (true) {
+                                    try {
+                                        val p = JavaDatagramPacket(bytes, bytes.size, addr, 8888)
+                                        socket.send(p)
+                                        kotlinx.coroutines.delay(2000)
+                                    } catch (_: Throwable) { break }
+                                }
+                                socket.close()
                             }
-                            socket.close()
-                        }
 
-                        // Connect self as client so host sees UI
-                        scope.launch {
+                            // Connect self as client so host sees UI
                             try {
                                 transport.startClient("127.0.0.1", 8765)
-                                connected = true
+                                withContext(Dispatchers.Main) { connected = true }
                             } catch (e: Exception) {
-                                errorMessage = e.message
+                                withContext(Dispatchers.Main) { errorMessage = e.message }
                             }
                         }
                     }) { Text("Host on this device") }

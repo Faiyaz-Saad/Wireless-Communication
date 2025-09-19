@@ -124,7 +124,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
-                    // Host button to start server on Android
+                    // Host button to start server on Android (Foreground Service)
                     androidx.compose.material3.Button(onClick = {
                         // Acquire multicast lock for discovery (main thread OK)
                         try {
@@ -137,36 +137,17 @@ class MainActivity : ComponentActivity() {
                         if (serverStarted) return@Button
                         serverStarted = true
 
+                        // Start foreground service to host Ktor server
+                        val intent = android.content.Intent(applicationContext, HostService::class.java)
+                        intent.putExtra(HostService.KEY_PORT, serverPort)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            applicationContext.startForegroundService(intent)
+                        } else {
+                            applicationContext.startService(intent)
+                        }
+
+                        // Connect self as client so host sees UI
                         uiScope.launch(Dispatchers.IO) {
-                            // Start Android-hosted server off main thread (bind to loopback)
-                            try {
-                                val server = embeddedServer(CIO, port = serverPort, host = "127.0.0.1") {
-                                    install(WebSockets)
-                                    routing {
-                                        webSocket("/ws") {
-                                            try {
-                                                for (frame in incoming) {
-                                                    if (frame is Frame.Text) {
-                                                        val msg = frame.readText()
-                                                        send(Frame.Text(msg))
-                                                    }
-                                                }
-                                            } catch (_: Throwable) {}
-                                        }
-                                    }
-                                }
-                                server.start(false)
-                            } catch (t: Throwable) {
-                                withContext(Dispatchers.Main) {
-                                    errorMessage = "Server start failed: ${t.message}"
-                                    serverStarted = false
-                                }
-                                return@launch
-                            }
-
-                            // Broadcaster disabled in safe-mode to avoid OEM/network kills
-
-                            // Connect self as client so host sees UI
                             try {
                                 transport.startClient("127.0.0.1", serverPort)
                                 withContext(Dispatchers.Main) { connected = true }

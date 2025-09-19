@@ -26,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.isActive
 import chat.transport.ChatTransport
 import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
@@ -33,6 +34,7 @@ import java.net.DatagramSocket
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.Flow
 import android.net.wifi.WifiManager
+import android.net.DhcpInfo
 import android.content.Context
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
@@ -63,6 +65,8 @@ class MainActivity : ComponentActivity() {
             var connected by remember { mutableStateOf(false) }
             var errorMessage by remember { mutableStateOf<String?>(null) }
             val uiScope = rememberCoroutineScope()
+            var serverStarted by remember { mutableStateOf(false) }
+            val serverPort = 9876
 
             // Host or Join controls
             if (connected) {
@@ -130,46 +134,60 @@ class MainActivity : ComponentActivity() {
                             lock.acquire()
                         } catch (_: Throwable) {}
 
+                        if (serverStarted) return@Button
+                        serverStarted = true
+
                         uiScope.launch(Dispatchers.IO) {
                             // Start Android-hosted server off main thread
-                            val server = embeddedServer(CIO, port = 8765) {
-                                install(WebSockets)
-                                routing {
-                                    webSocket("/ws") {
-                                        try {
-                                            for (frame in incoming) {
-                                                if (frame is Frame.Text) {
-                                                    val msg = frame.readText()
-                                                    send(Frame.Text(msg))
+                            try {
+                                val server = embeddedServer(CIO, port = serverPort) {
+                                    install(WebSockets)
+                                    routing {
+                                        webSocket("/ws") {
+                                            try {
+                                                for (frame in incoming) {
+                                                    if (frame is Frame.Text) {
+                                                        val msg = frame.readText()
+                                                        send(Frame.Text(msg))
+                                                    }
                                                 }
-                                            }
-                                        } catch (_: Throwable) {}
+                                            } catch (_: Throwable) {}
+                                        }
                                     }
                                 }
+                                server.start(false)
+                            } catch (t: Throwable) {
+                                withContext(Dispatchers.Main) {
+                                    errorMessage = "Server start failed: ${t.message}"
+                                    serverStarted = false
+                                }
+                                return@launch
                             }
-                            server.start(false)
 
                             // Start broadcaster
                             val bgScope = CoroutineScope(SupervisorJob())
                             bgScope.launch(Dispatchers.IO) {
-                                val message = "SERVER:8765"
+                                val message = "SERVER:$serverPort"
                                 val socket = JavaDatagramSocket()
-                                socket.broadcast = true
-                                val bytes = message.toByteArray()
-                                val addr = InetAddress.getByName("255.255.255.255")
-                                while (true) {
-                                    try {
-                                        val p = JavaDatagramPacket(bytes, bytes.size, addr, 8888)
-                                        socket.send(p)
-                                        kotlinx.coroutines.delay(2000)
-                                    } catch (_: Throwable) { break }
+                                try {
+                                    socket.broadcast = true
+                                    val bytes = message.toByteArray()
+                                    val addr = getSubnetBroadcastAddress(applicationContext) ?: InetAddress.getByName("255.255.255.255")
+                                    while (isActive) {
+                                        try {
+                                            val p = JavaDatagramPacket(bytes, bytes.size, addr, 8888)
+                                            socket.send(p)
+                                            kotlinx.coroutines.delay(2000)
+                                        } catch (_: Throwable) { break }
+                                    }
+                                } finally {
+                                    socket.close()
                                 }
-                                socket.close()
                             }
 
                             // Connect self as client so host sees UI
                             try {
-                                transport.startClient("127.0.0.1", 8765)
+                                transport.startClient("127.0.0.1", serverPort)
                                 withContext(Dispatchers.Main) { connected = true }
                             } catch (e: Exception) {
                                 withContext(Dispatchers.Main) { errorMessage = e.message }
@@ -218,5 +236,23 @@ suspend fun listenForServerBroadcast(port: Int = 8888): Pair<String?, Int>? {
             socket.close()
             null
         }
+    }
+}
+
+private fun getSubnetBroadcastAddress(context: Context): InetAddress? {
+    return try {
+        val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+        val dhcp: DhcpInfo = wifi.dhcpInfo ?: return null
+        val ip = dhcp.ipAddress
+        val mask = dhcp.netmask
+        if (ip == 0 || mask == 0) return null
+        val broadcastInt = (ip and mask) or mask.inv()
+        val quads = ByteArray(4)
+        for (k in 0..3) {
+            quads[k] = (broadcastInt shr (k * 8) and 0xFF).toByte()
+        }
+        InetAddress.getByAddress(quads)
+    } catch (_: Throwable) {
+        null
     }
 }

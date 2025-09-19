@@ -2,7 +2,8 @@ package org.example.project
 
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
-import androidx.compose.ui.window.exitApplication
+import kotlin.system.exitProcess
+import kotlinx.coroutines.runBlocking
 import androidx.compose.runtime.rememberCoroutineScope
 import chat.platform.platformHttpClient
 import chat.transport.KtorTransport
@@ -126,12 +127,12 @@ fun main() = application {
 
     Window(onCloseRequest = { 
         try {
-            transport.close()
+            runBlocking { transport.close() }
             server.stop(1000, 2000)
         } catch (e: Exception) {
             println("Error during cleanup: ${e.message}")
         }
-        exitApplication() 
+        exitProcess(0)
     }, title = "Wireless Communication Without Internet (WCWI)") {
         androidx.compose.runtime.rememberCoroutineScope().launch {
             // Connect to self for demo; Android will auto-discover via UDP

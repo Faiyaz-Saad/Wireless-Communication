@@ -27,6 +27,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.isActive
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import android.content.pm.PackageManager
+import android.os.Build
 import chat.transport.ChatTransport
 import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
@@ -59,6 +63,11 @@ class MainActivity : ComponentActivity() {
 
         val client = platformHttpClient()
         val transport = KtorTransport(client)
+
+        // Runtime permission launcher
+        val permissionLauncher = registerForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { /* results handled in Compose state via re-click */ }
 
         setContent {
             // State to track if connected and server info
@@ -126,6 +135,21 @@ class MainActivity : ComponentActivity() {
                     Spacer(modifier = Modifier.height(24.dp))
                     // Host button to start server on Android (Foreground Service)
                     androidx.compose.material3.Button(onClick = {
+                        // Ensure required runtime permissions first
+                        val needed = mutableListOf<String>()
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            needed.add(android.Manifest.permission.POST_NOTIFICATIONS)
+                            needed.add(android.Manifest.permission.NEARBY_WIFI_DEVICES)
+                        } else {
+                            needed.add(android.Manifest.permission.ACCESS_FINE_LOCATION)
+                        }
+                        val missing = needed.filter {
+                            ContextCompat.checkSelfPermission(applicationContext, it) != PackageManager.PERMISSION_GRANTED
+                        }
+                        if (missing.isNotEmpty()) {
+                            try { permissionLauncher.launch(missing.toTypedArray()) } catch (_: Throwable) {}
+                            return@Button
+                        }
                         // Acquire multicast lock for discovery (main thread OK)
                         try {
                             val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager

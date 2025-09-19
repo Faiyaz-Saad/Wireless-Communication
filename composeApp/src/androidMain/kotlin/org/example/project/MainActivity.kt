@@ -26,7 +26,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import chat.transport.ChatTransport
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.DatagramPacket
 import java.net.DatagramSocket
@@ -42,8 +41,10 @@ import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
-import java.net.DatagramSocket
-import java.net.DatagramPacket
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import java.net.DatagramSocket as JavaDatagramSocket
+import java.net.DatagramPacket as JavaDatagramPacket
 import java.net.InetAddress
 import chat.model.Envelope
 
@@ -149,14 +150,14 @@ class MainActivity : ComponentActivity() {
                         // Start broadcaster
                         val scope = CoroutineScope(SupervisorJob())
                         scope.launch(Dispatchers.IO) {
-                            val message = "SERVER:8765"
-                            val socket = DatagramSocket()
+                            val message = "SERVER:8765" // Assuming 8765 is the server port
+                            val socket = JavaDatagramSocket()
                             socket.broadcast = true
                             val bytes = message.toByteArray()
                             val addr = InetAddress.getByName("255.255.255.255")
-                            while (true) {
+                            while (true) { // Keep broadcasting
                                 try {
-                                    val p = DatagramPacket(bytes, bytes.size, addr, 8888)
+                                    val p = JavaDatagramPacket(bytes, bytes.size, addr, 8888)
                                     socket.send(p)
                                     kotlinx.coroutines.delay(2000)
                                 } catch (_: Throwable) { break }
@@ -198,13 +199,13 @@ fun AppAndroidPreview() {
 
 suspend fun listenForServerBroadcast(port: Int = 8888): Pair<String?, Int>? {
     return withContext(Dispatchers.IO) {
-        val socket = DatagramSocket(port)
+        val socket = JavaDatagramSocket(port)
         socket.broadcast = true
         val buffer = ByteArray(1024)
-        val packet = DatagramPacket(buffer, buffer.size)
+        val packet = JavaDatagramPacket(buffer, buffer.size)
         socket.soTimeout = 10000 // 10 seconds timeout
         try {
-            socket.receive(packet)
+            socket.receive(packet) // This will block until a packet is received or timeout occurs
             val msg = String(packet.data, 0, packet.length)
             socket.close()
             if (msg.startsWith("SERVER:")) {

@@ -19,10 +19,9 @@ import org.jetbrains.compose.resources.painterResource
 import productpurchasing.composeapp.generated.resources.Res
 import productpurchasing.composeapp.generated.resources.chat_bg
 import org.jetbrains.compose.resources.ExperimentalResourceApi
-import kotlin.io.encoding.Base64
-import kotlin.io.encoding.ExperimentalEncodingApi
+import java.util.Base64
 
-@OptIn(ExperimentalResourceApi::class, ExperimentalEncodingApi::class)
+@OptIn(ExperimentalResourceApi::class)
 @Composable
 fun ChatScreen(transport: ChatTransport, me: String, onPickImage: suspend () -> ByteArray?) {
     val scope = rememberCoroutineScope()
@@ -108,7 +107,7 @@ fun ChatScreen(transport: ChatTransport, me: String, onPickImage: suspend () -> 
                         try {
                             val bytes = onPickImage()
                             if (bytes != null) {
-                                val b64 = Base64.encode(bytes)
+                                val b64 = Base64.getEncoder().encodeToString(bytes)
                                 val msg = ChatMessage(
                                     id = java.util.UUID.randomUUID().toString(),
                                     from = me,

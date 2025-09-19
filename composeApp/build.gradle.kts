@@ -126,3 +126,9 @@ compose.desktop {
         }
     }
 }
+
+compose.resources {
+    publicResClass = "productpurchasing.composeapp.generated.resources.Res"
+    packageOfResClass = "productpurchasing.composeapp.generated.resources"
+    generateResClass = "always"
+}

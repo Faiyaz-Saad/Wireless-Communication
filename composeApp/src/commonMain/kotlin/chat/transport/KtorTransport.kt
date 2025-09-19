@@ -29,7 +29,7 @@ class KtorTransport(
                     if (frame is Frame.Text) {
                         val txt = frame.readText()
                         println("KtorTransport received: $txt")
-                        val env = json.decodeFromString(Envelope.serializer(), txt)
+                        val env = json.decodeFromString<Envelope>(txt)
                         println("KtorTransport decoded envelope: $env")
                         _incoming.emit(env)
                     }
@@ -41,7 +41,7 @@ class KtorTransport(
     }
 
     override suspend fun send(envelope: Envelope) {
-        val txt = json.encodeToString(Envelope.serializer(), envelope)
+        val txt = json.encodeToString(envelope)
         session?.send(Frame.Text(txt))
     }
 

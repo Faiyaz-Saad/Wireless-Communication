@@ -3,6 +3,7 @@ package org.example.project
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.exitApplication
+import androidx.compose.runtime.rememberCoroutineScope
 import chat.platform.platformHttpClient
 import chat.transport.KtorTransport
 import chat.ui.ChatScreen
@@ -123,7 +124,15 @@ fun main() = application {
     val client = platformHttpClient()
     val transport = KtorTransport(client)
 
-    Window(onCloseRequest = ::exitApplication, title = "Wireless Communication Without Internet (WCWI)") {
+    Window(onCloseRequest = { 
+        try {
+            transport.close()
+            server.stop(1000, 2000)
+        } catch (e: Exception) {
+            println("Error during cleanup: ${e.message}")
+        }
+        exitApplication() 
+    }, title = "Wireless Communication Without Internet (WCWI)") {
         androidx.compose.runtime.rememberCoroutineScope().launch {
             // Connect to self for demo; Android will auto-discover via UDP
             transport.startClient("127.0.0.1", 8765)
@@ -133,7 +142,7 @@ fun main() = application {
             transport = transport,
             me = "Desktop",
             onPickImage = {
-                withContext(Dispatchers.Main) {
+                try {
                     val chooser = JFileChooser()
                     chooser.dialogTitle = "Select image"
                     val res = chooser.showOpenDialog(null)
@@ -141,6 +150,9 @@ fun main() = application {
                         val f = chooser.selectedFile
                         f.readBytes()
                     } else null
+                } catch (e: Exception) {
+                    println("Error selecting image: ${e.message}")
+                    null
                 }
             }
         )

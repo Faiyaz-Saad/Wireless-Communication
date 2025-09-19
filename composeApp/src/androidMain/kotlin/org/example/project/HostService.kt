@@ -146,6 +146,24 @@ class HostService : Service() {
         } catch (_: Throwable) { null }
     }
 
+    private fun getSubnetBroadcastAddress(context: Context): InetAddress? {
+        return try {
+            val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
+            val dhcp: DhcpInfo = wifi.dhcpInfo ?: return null
+            val ip = dhcp.ipAddress
+            val mask = dhcp.netmask
+            if (ip == 0 || mask == 0) return null
+            val broadcastInt = (ip and mask) or mask.inv()
+            val quads = ByteArray(4)
+            for (k in 0..3) {
+                quads[k] = (broadcastInt shr (k * 8) and 0xFF).toByte()
+            }
+            InetAddress.getByAddress(quads)
+        } catch (_: Throwable) {
+            null
+        }
+    }
+
     companion object {
         const val KEY_PORT = "key_port"
         const val DEFAULT_PORT = 9876

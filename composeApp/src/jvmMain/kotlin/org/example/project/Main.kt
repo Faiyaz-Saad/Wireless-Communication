@@ -120,7 +120,26 @@ fun main() = application {
     }
     server.start(wait = false)
     
-    startUdpBroadcast() // Broadcast server presence
+    // Broadcast server presence (UDP)
+    Thread {
+        val port = 8888
+        val message = "SERVER:8765"
+        val socket = DatagramSocket()
+        socket.broadcast = true
+        val buffer = message.toByteArray()
+        val address = InetAddress.getByName("255.255.255.255")
+        while (true) {
+            try {
+                val packet = DatagramPacket(buffer, buffer.size, address, port)
+                socket.send(packet)
+                Thread.sleep(2000)
+            } catch (e: Exception) {
+                println("UDP broadcast error: ${e.message}")
+                break
+            }
+        }
+        socket.close()
+    }.start()
 
     val client = platformHttpClient()
     val transport = KtorTransport(client)

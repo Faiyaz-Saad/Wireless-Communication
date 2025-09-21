@@ -96,6 +96,11 @@ android {
         versionCode = 1
         versionName = "1.0"
     }
+    compileOptions {
+        isCoreLibraryDesugaringEnabled = true
+        sourceCompatibility = JavaVersion.VERSION_1_8
+        targetCompatibility = JavaVersion.VERSION_1_8
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
@@ -106,14 +111,12 @@ android {
             isMinifyEnabled = false
         }
     }
-    compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
-    }
 }
 
 dependencies {
     debugImplementation(compose.uiTooling)
+    // Core library desugaring for java.time.Duration support on API 24
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
 
 compose.desktop {

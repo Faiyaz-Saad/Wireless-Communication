@@ -4,56 +4,49 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import chat.platform.platformHttpClient
-import chat.transport.KtorTransport
-import chat.ui.ChatScreen
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextField
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.isActive
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
-import android.content.pm.PackageManager
-import android.os.Build
-import chat.transport.ChatTransport
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.net.DatagramPacket
-import java.net.DatagramSocket
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.Flow
-import android.net.wifi.WifiManager
-import android.net.DhcpInfo
-import android.content.Context
+import kotlinx.coroutines.delay
 import io.ktor.server.application.*
 import io.ktor.server.engine.*
 import io.ktor.server.cio.*
 import io.ktor.server.routing.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import java.net.DatagramSocket as JavaDatagramSocket
-import java.net.DatagramPacket as JavaDatagramPacket
+import io.ktor.server.response.*
+import io.ktor.client.plugins.websocket.*
+import android.content.Context
+import android.net.wifi.WifiManager
+import android.net.DhcpInfo
 import java.net.InetAddress
-import chat.model.Envelope
 
 class MainActivity : ComponentActivity() {
 
@@ -61,32 +54,37 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
-        val client = platformHttpClient()
-        val transport = KtorTransport(client)
-
-        // Runtime permission launcher
-        val permissionLauncher = registerForActivityResult(
-            ActivityResultContracts.RequestMultiplePermissions()
-        ) { /* results handled in Compose state via re-click */ }
-
         setContent {
-            // State to track if connected and server info
+            // State management for connection
             var connected by remember { mutableStateOf(false) }
-            var errorMessage by remember { mutableStateOf<String?>(null) }
+            var isServer by remember { mutableStateOf(false) }
+            var statusMessage by remember { mutableStateOf("Choose connection mode") }
+            var serverIp by remember { mutableStateOf("") }
+            var showIpInput by remember { mutableStateOf(false) }
+            var clientConnected by remember { mutableStateOf(false) }
             val uiScope = rememberCoroutineScope()
-            var serverStarted by remember { mutableStateOf(false) }
-            var manualHost by remember { mutableStateOf("") }
-            var showManualInput by remember { mutableStateOf(false) }
             val serverPort = 9876
 
-            // Host or Join controls
-            if (connected) {
-                ChatScreen(
-                    transport = transport,
-                    me = "AndroidUser",
-                    onPickImage = { null }
-                )
-            } else {
+                    if (connected) {
+                        // Simple chat interface instead of complex ChatScreen
+                        SimpleChatScreen(
+                            isServer = isServer,
+                            serverIp = if (isServer) getLocalIpAddress(applicationContext) ?: "Unknown" else serverIp,
+                            serverPort = serverPort,
+                            onSendMessage = { message ->
+                                // Handle message sending
+                                uiScope.launch(Dispatchers.IO) {
+                                    if (isServer) {
+                                        // Server sends to all connected clients
+                                        sendMessageToClients(message)
+                                    } else {
+                                        // Client sends to server
+                                        sendMessageToServer(message)
+                                    }
+                                }
+                            }
+                        )
+                    } else {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
@@ -100,199 +98,445 @@ class MainActivity : ComponentActivity() {
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))
+                    
+                    Text(
+                        text = statusMessage,
+                        style = MaterialTheme.typography.bodyLarge
+                    )
 
-                    if (errorMessage != null) {
-                        Text(
-                            text = errorMessage!!,
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    } else {
-                        Text(
-                            text = "Connecting to server...",
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                    }
-
-                    // Try to connect in background (Join flow)
-                    LaunchedEffect(Unit) {
-                        try {
-                            val serverInfo = listenForServerBroadcast()
-                            if (serverInfo != null) {
-                                val (host, port) = serverInfo
-                                if (host != null) {
-                                    try {
-                                        transport.startClient(host, port)
-                                        connected = true // Switch to ChatScreen
-                                    } catch (e: Exception) {
-                                        errorMessage = "Connection error: ${e.message}"
+                    Spacer(modifier = Modifier.height(24.dp))
+                    
+                    if (showIpInput) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            TextField(
+                                value = serverIp,
+                                onValueChange = { serverIp = it },
+                                label = { Text("Enter server IP (e.g., 192.168.1.100)") },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(16.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = {
+                                    if (serverIp.isNotBlank()) {
+                                        uiScope.launch(Dispatchers.IO) {
+                                            try {
+                                                withContext(Dispatchers.Main) { 
+                                                    statusMessage = "Connecting to $serverIp..." 
+                                                }
+                                                println("=== CLIENT CONNECTION BEGIN ===")
+                                                println("Attempting to connect to $serverIp:$serverPort")
+                                                
+                                                // First test HTTP connection
+                                                val testUrl = "http://$serverIp:$serverPort/test"
+                                                val response = java.net.URL(testUrl).openConnection()
+                                                response.connectTimeout = 5000
+                                                response.readTimeout = 5000
+                                                val inputStream = response.getInputStream()
+                                                val responseText = inputStream.bufferedReader().use { it.readText() }
+                                                println("Server test response: $responseText")
+                                                
+                                                // Now establish WebSocket connection
+                                                val client = platformHttpClient()
+                                                val wsSession = client.webSocketSession(host = serverIp, port = serverPort, path = "/ws")
+                                                clientSession = wsSession // Store globally
+                                                println("WebSocket session established")
+                                                
+                                                // Send a connection message to notify server
+                                                wsSession.send(Frame.Text("Client connected"))
+                                                println("Sent connection message to server")
+                                                
+                                                // Start listening for incoming messages
+                                                uiScope.launch(Dispatchers.IO) {
+                                                    try {
+                                                        for (frame in wsSession.incoming) {
+                                                            if (frame is Frame.Text) {
+                                                                val msg = frame.readText()
+                                                                println("Client received: $msg")
+                                                                // Add received message to global list
+                                                                onMessageReceived?.invoke(msg)
+                                                            }
+                                                        }
+                                                    } catch (e: Exception) {
+                                                        println("Error receiving messages: ${e.message}")
+                                                    }
+                                                }
+                                                
+                                                withContext(Dispatchers.Main) { 
+                                                    connected = true
+                                                    isServer = false
+                                                    statusMessage = "Connected to $serverIp"
+                                                }
+                                                println("Successfully connected to $serverIp:$serverPort")
+                                                println("=== CLIENT CONNECTION COMPLETE ===")
+                                                
+                                            } catch (e: kotlinx.coroutines.TimeoutCancellationException) {
+                                                println("=== CLIENT CONNECTION TIMEOUT ===")
+                                                withContext(Dispatchers.Main) { 
+                                                    statusMessage = "Connection timeout - make sure server is running"
+                                                }
+                                            } catch (e: Exception) {
+                                                println("=== CLIENT CONNECTION ERROR ===")
+                                                println("Connection error: ${e.message}")
+                                                println("Stack trace: ${e.stackTrace.joinToString("\n")}")
+                                                withContext(Dispatchers.Main) { 
+                                                    statusMessage = "Connection failed: ${e.message}"
+                                                }
+                                                println("=== CLIENT CONNECTION ERROR END ===")
+                                            }
+                                        }
                                     }
-                                } else {
-                                    errorMessage = "Server host is null."
-                                }
-                            } else {
-                                errorMessage = "No server found on the network. Try hosting instead."
+                                }) { Text("Connect") }
+                                Button(onClick = { 
+                                    showIpInput = false
+                                    statusMessage = "Choose connection mode"
+                                }) { Text("Cancel") }
                             }
-                        } catch (e: Exception) {
-                            errorMessage = "Discovery failed: ${e.message}"
+                        }
+                    } else {
+                        // Server button
+                        Button(
+                            onClick = {
+                                uiScope.launch(Dispatchers.IO) {
+                                    try {
+                                        withContext(Dispatchers.Main) { 
+                                            statusMessage = "Starting server..." 
+                                        }
+                                        println("=== SERVER STARTUP BEGIN ===")
+                                        println("Starting WebSocket server on port $serverPort")
+                                        
+                                        // Start the server
+                                        startWebSocketServer(serverPort) { 
+                                            // Callback when client connects
+                                            clientConnected = true
+                                            connected = true
+                                            statusMessage = "Client connected - Chat ready"
+                                        }
+                                        
+                                        // Get IP address
+                                        val myIp = getLocalIpAddress(applicationContext) ?: "Unknown"
+                                        println("Server started successfully on $myIp:$serverPort")
+                                        
+                                        // Update UI
+                                        withContext(Dispatchers.Main) {
+                                            isServer = true
+                                            statusMessage = "Server running on $myIp:$serverPort - Waiting for client..."
+                                        }
+                                        println("=== SERVER STARTUP COMPLETE ===")
+                                        
+                                    } catch (e: Exception) {
+                                        println("=== SERVER STARTUP ERROR ===")
+                                        println("Server startup error: ${e.message}")
+                                        println("Stack trace: ${e.stackTrace.joinToString("\n")}")
+                                        withContext(Dispatchers.Main) { 
+                                            statusMessage = "Server failed: ${e.message}"
+                                        }
+                                        println("=== SERVER STARTUP ERROR END ===")
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Start Server")
+                        }
+                        
+                        Spacer(modifier = Modifier.height(8.dp))
+                        
+                        // Test server button
+                        Button(
+                            onClick = {
+                                uiScope.launch(Dispatchers.IO) {
+                                    try {
+                                        withContext(Dispatchers.Main) { 
+                                            statusMessage = "Testing server..." 
+                                        }
+                                        val myIp = getLocalIpAddress(applicationContext) ?: "Unknown"
+                                        val testUrl = "http://$myIp:$serverPort/test"
+                                        println("Testing server at: $testUrl")
+                                        
+                                        // Simple HTTP test
+                                        val response = java.net.URL(testUrl).openConnection()
+                                        response.connectTimeout = 5000
+                                        response.readTimeout = 5000
+                                        val inputStream = response.getInputStream()
+                                        val responseText = inputStream.bufferedReader().use { it.readText() }
+                                        
+                                        withContext(Dispatchers.Main) { 
+                                            statusMessage = "Server test: $responseText"
+                                        }
+                                        println("Server test response: $responseText")
+                                        
+                                    } catch (e: Exception) {
+                                        println("Server test failed: ${e.message}")
+                                        withContext(Dispatchers.Main) { 
+                                            statusMessage = "Server test failed: ${e.message}"
+                                        }
+                                    }
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Test Server")
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        // Client button
+                        Button(
+                            onClick = { 
+                                showIpInput = true
+                                statusMessage = "Enter server IP address"
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Connect as Client")
                         }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
                     
-                    // Manual connection option
-                    if (showManualInput) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            TextField(
-                                value = manualHost,
-                                onValueChange = { manualHost = it },
-                                label = { Text("Enter host IP (e.g., 192.168.1.100)") },
-                                modifier = Modifier.fillMaxWidth()
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = {
-                                    if (manualHost.isNotBlank()) {
-                                        uiScope.launch(Dispatchers.IO) {
-                                            try {
-                                                transport.startClient(manualHost, serverPort)
-                                                withContext(Dispatchers.Main) { 
-                                                    connected = true
-                                                    errorMessage = null
-                                                }
-                                            } catch (e: Exception) {
-                                                withContext(Dispatchers.Main) { 
-                                                    errorMessage = "Failed to connect to $manualHost: ${e.message}"
-                                                }
-                                            }
-                                        }
-                                    }
-                                }) { Text("Connect") }
-                                Button(onClick = { showManualInput = false }) { Text("Cancel") }
-                            }
-                        }
-                        Spacer(modifier = Modifier.height(16.dp))
-                    }
-                    
-                    // Host button to start server on Android (Foreground Service)
-                    androidx.compose.material3.Button(onClick = {
-                        // Ensure required runtime permissions first
-                        val needed = mutableListOf<String>()
-                        if (Build.VERSION.SDK_INT >= 33) {
-                            needed.add(android.Manifest.permission.POST_NOTIFICATIONS)
-                            needed.add(android.Manifest.permission.NEARBY_WIFI_DEVICES)
-                        } else {
-                            needed.add(android.Manifest.permission.ACCESS_FINE_LOCATION)
-                        }
-                        val missing = needed.filter {
-                            ContextCompat.checkSelfPermission(applicationContext, it) != PackageManager.PERMISSION_GRANTED
-                        }
-                        if (missing.isNotEmpty()) {
-                            try { permissionLauncher.launch(missing.toTypedArray()) } catch (_: Throwable) {}
-                            return@Button
-                        }
-                        // Acquire multicast lock for discovery (main thread OK)
-                        try {
-                            val wifi = applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
-                            val lock = wifi.createMulticastLock("wcwi-lock")
-                            lock.setReferenceCounted(true)
-                            lock.acquire()
-                        } catch (_: Throwable) {}
-
-                        if (serverStarted) return@Button
-                        serverStarted = true
-
-                        // Start foreground service to host Ktor server
-                        val intent = android.content.Intent(applicationContext, HostService::class.java)
-                        intent.putExtra(HostService.KEY_PORT, serverPort)
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                            applicationContext.startForegroundService(intent)
-                        } else {
-                            applicationContext.startService(intent)
-                        }
-
-                        // Connect self as client with simple retry to avoid race with service start
-                        uiScope.launch(Dispatchers.IO) {
-                            var lastError: String? = null
-                            repeat(5) { attempt ->
-                                try {
-                                    transport.startClient("127.0.0.1", serverPort)
-                                    withContext(Dispatchers.Main) { connected = true; errorMessage = null }
-                                    return@launch
-                                } catch (e: Exception) {
-                                    lastError = e.message
-                                    kotlinx.coroutines.delay(400L * (attempt + 1))
-                                }
-                            }
-                            withContext(Dispatchers.Main) { errorMessage = "Failed to connect to 127.0.0.1:$serverPort: ${'$'}lastError" }
-                        }
-                    }) { Text("Host on this device") }
-                    
-                    Spacer(modifier = Modifier.height(8.dp))
-                    
-                    // Manual connection button
-                    Button(onClick = { showManualInput = !showManualInput }) {
-                        Text(if (showManualInput) "Hide Manual Connection" else "Connect Manually")
-                    }
+                    Text(
+                        text = "Instructions:\n1. One device: Start Server\n2. Other device: Enter server IP and connect",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
                 }
             }
         }
     }
 }
 
-@Preview
+// Simple chat screen that doesn't use the complex transport system
 @Composable
-fun AppAndroidPreview() {
-    // Preview with mock transport
-    ChatScreen(
-        transport = object : ChatTransport {
-            override val incoming: Flow<Envelope> = emptyFlow()
-            override suspend fun startClient(host: String, port: Int) {}
-            override suspend fun send(envelope: Envelope) {}
-            override suspend fun close() {}
-        },
-        me = "Preview",
-        onPickImage = { null }
-    )
-}
-
-suspend fun listenForServerBroadcast(port: Int = 8888): Pair<String?, Int>? {
-    return withContext(Dispatchers.IO) {
-        val socket = JavaDatagramSocket(port)
-        socket.broadcast = true
-        val buffer = ByteArray(1024)
-        val packet = JavaDatagramPacket(buffer, buffer.size)
-        socket.soTimeout = 10000 // 10 seconds timeout
-        try {
-            socket.receive(packet) // This will block until a packet is received or timeout occurs
-            val msg = String(packet.data, 0, packet.length)
-            socket.close()
-            if (msg.startsWith("SERVER:")) {
-                val serverPort = msg.substringAfter(":").toInt()
-                val host = packet.address.hostAddress
-                Pair(host, serverPort)
-            } else null
-        } catch (e: Exception) {
-            socket.close()
-            null
+fun SimpleChatScreen(
+    isServer: Boolean,
+    serverIp: String,
+    serverPort: Int,
+    onSendMessage: (String) -> Unit
+) {
+    var messages by remember { mutableStateOf(globalMessages.toList()) }
+    var inputText by remember { mutableStateOf("") }
+    val uiScope = rememberCoroutineScope()
+    
+    // Set up message reception callback
+    LaunchedEffect(Unit) {
+        onMessageReceived = { newMessage ->
+            globalMessages.add(newMessage)
+            messages = globalMessages.toList()
+        }
+    }
+    
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+    ) {
+        Text(
+            text = if (isServer) "Server Mode - IP: $serverIp:$serverPort" else "Client Mode - Connected to $serverIp:$serverPort",
+            style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(bottom = 16.dp)
+        )
+        
+        // Messages display
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+        ) {
+            items(messages) { message ->
+                Text(
+                    text = message,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                )
+            }
+        }
+        
+        // Input area
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            TextField(
+                value = inputText,
+                onValueChange = { inputText = it },
+                label = { Text("Type message...") },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    if (inputText.isNotBlank()) {
+                        val newMessage = "${if (isServer) "Server" else "Client"}: $inputText"
+                        globalMessages.add(newMessage)
+                        messages = globalMessages.toList()
+                        onSendMessage(inputText) // Send the message to other device
+                        inputText = ""
+                        println("Sending message: $newMessage")
+                    }
+                }
+            ) {
+                Text("Send")
+            }
         }
     }
 }
 
-private fun getSubnetBroadcastAddress(context: Context): InetAddress? {
+// Global variables to store WebSocket sessions
+private var serverClients = mutableSetOf<DefaultWebSocketServerSession>()
+private var clientSession: DefaultClientWebSocketSession? = null
+
+// Global message state for sharing between WebSocket handlers and UI
+private var globalMessages = mutableListOf<String>()
+private var onMessageReceived: ((String) -> Unit)? = null
+
+// Function to send message from server to all clients
+private suspend fun sendMessageToClients(message: String) {
+    println("Server sending message to clients: $message")
+    val deadClients = mutableSetOf<DefaultWebSocketServerSession>()
+    serverClients.forEach { client ->
+        try {
+            client.send(Frame.Text("Server: $message"))
+        } catch (e: Exception) {
+            println("Error sending to client: ${e.message}")
+            deadClients.add(client)
+        }
+    }
+    serverClients.removeAll(deadClients)
+}
+
+// Function to send message from client to server
+private suspend fun sendMessageToServer(message: String) {
+    println("Client sending message to server: $message")
+    try {
+        clientSession?.send(Frame.Text("Client: $message"))
+    } catch (e: Exception) {
+        println("Error sending to server: ${e.message}")
+    }
+}
+
+@Preview
+@Composable
+fun AppAndroidPreview() {
+    SimpleChatScreen(
+        isServer = true,
+        serverIp = "192.168.1.100",
+        serverPort = 9876,
+        onSendMessage = { }
+    )
+}
+
+// Working WebSocket server function
+suspend fun startWebSocketServer(port: Int, onClientConnect: (() -> Unit)? = null) {
+    withContext(Dispatchers.IO) {
+        try {
+            println("Creating WebSocket server on port $port")
+            val connectedClients = mutableSetOf<DefaultWebSocketServerSession>()
+            
+            val server = embeddedServer(CIO, port = port, host = "0.0.0.0") {
+                install(io.ktor.server.websocket.WebSockets) {
+                    maxFrameSize = Long.MAX_VALUE
+                }
+                routing {
+                    // Test endpoint to verify server is running
+                    get("/test") {
+                        call.respondText("Server is running on port $port")
+                    }
+                    
+                    webSocket("/ws") {
+                        println("Client connected to WebSocket server")
+                        connectedClients.add(this)
+                        serverClients.add(this) // Add to global list
+                        
+                        // Notify that client connected
+                        onClientConnect?.invoke()
+                        
+                        try {
+                            // Send a welcome message to the client
+                            send(Frame.Text("Welcome to the chat server!"))
+                            println("Welcome message sent to client")
+                            
+                            for (frame in incoming) {
+                                when (frame) {
+                                    is Frame.Text -> {
+                                        val msg = frame.readText()
+                                        println("Server received: $msg")
+                                        
+                                        // Add received message to global list
+                                        onMessageReceived?.invoke(msg)
+                                        
+                                        // Broadcast to all connected clients except sender
+                                        val deadClients = mutableSetOf<DefaultWebSocketServerSession>()
+                                        connectedClients.forEach { client ->
+                                            try {
+                                                if (client != this) {
+                                                    client.send(Frame.Text(msg))
+                                                }
+                                            } catch (e: Exception) {
+                                                println("Error sending to client: ${e.message}")
+                                                deadClients.add(client)
+                                            }
+                                        }
+                                        // Remove dead clients
+                                        connectedClients.removeAll(deadClients)
+                                        serverClients.removeAll(deadClients)
+                                    }
+                                    is Frame.Close -> {
+                                        println("Client sent close frame")
+                                        break
+                                    }
+                                    is Frame.Ping -> {
+                                        println("Received ping from client")
+                                        send(Frame.Pong(frame.buffer))
+                                    }
+                                    is Frame.Pong -> {
+                                        println("Received pong from client")
+                                    }
+                                    else -> {
+                                        println("Received unknown frame type: ${frame::class.simpleName}")
+                                    }
+                                }
+                            }
+                        } catch (e: Exception) {
+                            println("WebSocket error: ${e.message}")
+                            println("WebSocket error stack trace: ${e.stackTrace.joinToString("\n")}")
+                        } finally {
+                            connectedClients.remove(this)
+                            serverClients.remove(this)
+                            println("Client disconnected from WebSocket server")
+                        }
+                    }
+                }
+            }
+            
+            println("Starting server...")
+            server.start(wait = false)
+            
+            // Wait a bit for server to be ready
+            delay(500)
+            println("WebSocket server started successfully on port $port")
+            
+        } catch (e: Exception) {
+            println("Failed to start WebSocket server: ${e.message}")
+            println("Stack trace: ${e.stackTrace.joinToString("\n")}")
+            throw e
+        }
+    }
+}
+
+// Helper function to get local IP address
+private fun getLocalIpAddress(context: Context): String? {
     return try {
         val wifi = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as WifiManager
         val dhcp: DhcpInfo = wifi.dhcpInfo ?: return null
         val ip = dhcp.ipAddress
-        val mask = dhcp.netmask
-        if (ip == 0 || mask == 0) return null
-        val broadcastInt = (ip and mask) or mask.inv()
+        if (ip == 0) return null
         val quads = ByteArray(4)
         for (k in 0..3) {
-            quads[k] = (broadcastInt shr (k * 8) and 0xFF).toByte()
+            quads[k] = (ip shr (k * 8) and 0xFF).toByte()
         }
-        InetAddress.getByAddress(quads)
-    } catch (_: Throwable) {
-        null
+        InetAddress.getByAddress(quads).hostAddress
+    } catch (_: Throwable) { 
+        null 
     }
 }

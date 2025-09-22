@@ -104,8 +104,6 @@ fun SimpleChatScreen(
                         messages = globalMessages.toList()
                         onSendMessage(inputText) // Send the message to other device
                         inputText = ""
-                        println("Sending message: $newMessage")
-                    }
                 }
             ) {
                 Text("Send")

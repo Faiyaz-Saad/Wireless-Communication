@@ -3,7 +3,6 @@ package org.example.project
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import chat.platform.platformHttpClient
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
@@ -29,24 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.LaunchedEffect
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
-import io.ktor.server.application.*
-import io.ktor.server.engine.*
-import io.ktor.server.cio.*
-import io.ktor.server.routing.*
-import io.ktor.server.websocket.*
-import io.ktor.websocket.*
-import io.ktor.server.response.*
-import io.ktor.client.plugins.websocket.*
-import android.content.Context
-import android.net.wifi.WifiManager
-import android.net.DhcpInfo
-import java.net.InetAddress
 
 class MainActivity : ComponentActivity() {
 

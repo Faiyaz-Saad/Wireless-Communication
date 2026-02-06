@@ -2229,3 +2229,22 @@ fun SimpleChatScreen(
 //        }
 //    }
 //}
+                label = { Text("Type message...") },
+                modifier = Modifier.weight(1f)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(
+                onClick = {
+                    if (inputText.isNotBlank()) {
+                        val newMessage = "${if (isServer) "Server" else "Client"}: $inputText"
+                        globalMessages.add(newMessage)
+                        messages = globalMessages.toList()
+                        onSendMessage(inputText) // Send the message to other device
+                        inputText = ""
+                }
+            ) {
+                Text("Send")
+            }
+        }
+    }
+}

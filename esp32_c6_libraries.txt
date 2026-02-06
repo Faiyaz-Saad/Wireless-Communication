@@ -1,0 +1,68 @@
+/*
+ * Required Libraries for ESP32-C6 LoRa Mesh System
+ * 
+ * Install these libraries through Arduino IDE Library Manager:
+ * 
+ * 1. ESP32 Arduino Core (if not already installed)
+ *    - Board: ESP32 Arduino -> ESP32C6 Dev Module
+ * 
+ * 2. Adafruit SSD1306
+ *    - Library Manager: Search "Adafruit SSD1306"
+ *    - Author: Adafruit
+ * 
+ * 3. Adafruit GFX Library
+ *    - Library Manager: Search "Adafruit GFX Library"
+ *    - Author: Adafruit
+ * 
+ * 4. ArduinoJson
+ *    - Library Manager: Search "ArduinoJson"
+ *    - Author: Benoit Blanchon
+ * 
+ * 5. SoftwareSerial (Built-in)
+ *    - Usually included with ESP32 Arduino Core
+ * 
+ * Board Configuration:
+ * 1. File -> Preferences -> Additional Boards Manager URLs:
+ *    https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
+ * 
+ * 2. Tools -> Board -> Boards Manager
+ *    Search "ESP32" and install "ESP32 by Espressif Systems"
+ * 
+ * 3. Select Board: Tools -> Board -> ESP32 Arduino -> ESP32C6 Dev Module
+ * 
+ * 4. Set Upload Speed: Tools -> Upload Speed -> 921600
+ * 
+ * 5. Set CPU Frequency: Tools -> CPU Frequency -> 240MHz (WiFi/BT)
+ * 
+ * 6. Set Flash Size: Tools -> Flash Size -> 4MB (32Mb)
+ * 
+ * 7. Set Partition Scheme: Tools -> Partition Scheme -> Default 4MB with spiffs
+ * 
+ * Pin Mapping for ESP32-C6:
+ * GPIO4  -> LoRa TX
+ * GPIO5  -> LoRa RX  
+ * GPIO7  -> OLED SDA
+ * GPIO8  -> OLED SCL
+ * GPIO6  -> Status LED
+ * GPIO9  -> Mesh LED
+ * GPIO10 -> Bluetooth LED
+ * 
+ * Hardware Connections:
+ * LoRa Module (E220-900T22D):
+ * - VCC -> 3.3V
+ * - GND -> GND
+ * - TX  -> GPIO4 (ESP32-C6 RX)
+ * - RX  -> GPIO5 (ESP32-C6 TX)
+ * 
+ * OLED Display (0.96" I2C):
+ * - VCC -> 3.3V
+ * - GND -> GND
+ * - SCL -> GPIO8
+ * - SDA -> GPIO7
+ * 
+ * Power Requirements:
+ * - ESP32-C6: 3.3V, ~240mA (with WiFi/BT active)
+ * - LoRa Module: 3.3V, ~120mA (transmit), ~15mA (receive)
+ * - OLED Display: 3.3V, ~20mA
+ * - Total: ~400mA peak, recommend 1A power supply
+ */

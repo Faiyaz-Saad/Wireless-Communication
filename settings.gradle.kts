@@ -1,4 +1,4 @@
-rootProject.name = "ProductPurchasing"
+rootProject.name = "WCWI" //ProductPurchasing
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 
 pluginManagement {

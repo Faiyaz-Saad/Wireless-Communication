@@ -1,0 +1,58 @@
+APP FEATURES (ANDROID)
+- The app lets two Android phones chat without needing the internet. The screen is made with Jetpack Compose, so it looks modern and works smoothly.
+- You can choose to talk over Wi-Fi or Bluetooth. Both options are built in, so the app keeps working even if one type of connection fails.
+- Every message and photo is saved on the phone by a helper called `MessageStorageManager`. If you close the app, your chat history is still there.
+- You can send pictures, zoom them in fullscreen, pick several messages, and delete them on both phones at once.
+
+HOW THE APP IS PUT TOGETHER (ANDROID ONLY)
+Think of the app like three layers that talk to each other:
+
+1. **UI Layer (Compose screens)**: Shows the chat, buttons, image viewer, and reacts when the user types or taps.
+2. **MainActivity (traffic controller)**: Keeps track of the chosen mode (Wi-Fi or Bluetooth), stores the chat list, saves history, and tells the UI what to show.
+3. **Connection Layers**:
+   - Wi-Fi Server: waits for another phone to connect.
+   - Wi-Fi Client: connects to the server using an IP address.
+   - Bluetooth Manager: handles pairing, discovery, and reading/writing Bluetooth messages.
+
+HOW PHONES CONNECT TO EACH OTHER
+- On the home screen you pick Wi-Fi or Bluetooth. The choice changes the instructions and buttons you see.
+- **Wi-Fi**: One phone taps “Start Server”. It runs a tiny WebSocket server on port 9876. The other phone types the server’s IP address (the app shows it) and taps “Connect”. A quick HTTP check to `/test` confirms the server is alive before the chat starts.
+- **Bluetooth**: One phone taps “Start Bluetooth Server” and waits. The other taps “Connect as Bluetooth Client”, picks a paired device, and the phones link up over Bluetooth.
+- After they connect, the chat screen opens and both sides can talk like a regular messenger.
+
+HOW MESSAGES FLOW
+- Every message is given an ID so the app can remove duplicates and handle deletes even if they arrive twice.
+- Text looks like this under the hood: `TEXT:<Sender>:<MessageId>:<Message>`.
+- Images look like this: `IMAGE:<Sender>:<MessageId>:<ImageData>`, where `ImageData` is a Base64 string (basically the picture turned into text).
+- Deleting a message sends: `DELETE:<MessageId>`. The other phone removes it from the list and from storage.
+- Helper functions (for example `sendMessageToClients`, `sendImageToServer`) decide which channel to use and make sure both phones stay in sync.
+
+NETWORK TERMS IN SIMPLE WORDS
+- **WebSocket**: A chat-friendly internet link. It is used here, but only inside the local Wi-Fi network, so there’s no need for public internet.
+- **TCP**: The reliable highway WebSockets drive on. It guarantees message order and delivery.
+- **Bluetooth SPP (Serial Port Profile)**: A classic Bluetooth channel that acts like a wire between two devices. Messages are sent as text lines ending with `\n` so the other side knows when one message stops.
+
+WHAT POWERS THE WI-FI SIDE
+- The server runs with Ktor’s `embeddedServer(CIO)`. It listens on `0.0.0.0:9876`, which means “any network interface on this phone”.
+- When a message arrives, the server saves it, updates the UI, and sends it to any other connected client.
+- The client uses a Ktor `HttpClient` with the OkHttp engine (Android’s friendly HTTP library) to connect and maintain the chat session.
+- The app uses the `WifiManager` system service to show the current phone’s IP address so the second phone knows where to connect.
+
+WHAT POWERS THE BLUETOOTH SIDE
+- `BluetoothManager` wraps all the Android Bluetooth APIs so the rest of the app can just call simple functions like `startServer()` or `sendMessage()`.
+- The server waits using `listenUsingRfcommWithServiceRecord`. The client creates a socket with `createRfcommSocketToServiceRecord` using the same UUID so they can talk.
+- Messages are read in a loop on a background thread (Kotlin coroutines on the IO dispatcher). When a whole message (ending with `\n`) arrives, the manager calls back into the UI to show it.
+- When sending, the app adds `\n` to each message so the receiver can split the stream correctly.
+
+GOOD POINTS AND LIMITATIONS
+- **Pros**: Works offline, handles text and images, keeps history, offers a familiar chat look, and gives you a choice between Wi-Fi and Bluetooth. Logs in the code help developers troubleshoot problems.
+- **Cons**: Typing the IP address for Wi-Fi can be annoying. Only one other phone can connect at a time. The main activity holds a lot of logic, which makes it harder to test or extend. There is also no extra security layer—Wi-Fi traffic is plain text within the local network and Bluetooth depends on normal device pairing.
+
+WHAT COULD BE IMPROVED LATER
+- Auto-discover the Wi-Fi server using Android’s Network Service Discovery (NSD) so users don’t have to type IP addresses.
+- Allow more than two phones to chat at once and manage rooms or groups.
+- Add encryption: HTTPS/TLS for Wi-Fi, extra key checks for Bluetooth, and secure storage for saved chats.
+- Move networking and storage work into dedicated classes (for example, ViewModels with Kotlin Flow) to keep `MainActivity` clean and testable.
+- Add delivery/read receipts, queued sending when a device is offline, background services for always-on connectivity, optional push notifications, and better handling for large media files.
+
+

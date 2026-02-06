@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32-C6 LoRa Mesh Interface</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+            margin-bottom: 20px;
+        }
+        .status-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .status-card {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .status-card h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        .status-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #28a745;
+        }
+        .message-panel {
+            margin-bottom: 20px;
+        }
+        .message-form {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .message-input {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .send-button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        .send-button:hover {
+            background-color: #0056b3;
+        }
+        .message-history {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            height: 300px;
+            overflow-y: auto;
+            background-color: #f8f9fa;
+        }
+        .message-item {
+            margin-bottom: 10px;
+            padding: 8px;
+            border-radius: 5px;
+            background-color: white;
+        }
+        .message-time {
+            font-size: 12px;
+            color: #6c757d;
+        }
+        .message-content {
+            margin-top: 5px;
+        }
+        .control-panel {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        .control-button {
+            padding: 10px;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .control-button:hover {
+            background-color: #218838;
+        }
+        .control-button.danger {
+            background-color: #dc3545;
+        }
+        .control-button.danger:hover {
+            background-color: #c82333;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            color: #6c757d;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>ESP32-C6 LoRa Mesh Communication</h1>
+            <p>Long-range wireless communication system</p>
+        </div>
+
+        <div class="status-panel">
+            <div class="status-card">
+                <h3>Node ID</h3>
+                <div class="status-value" id="nodeId">Loading...</div>
+            </div>
+            <div class="status-card">
+                <h3>Battery Level</h3>
+                <div class="status-value" id="batteryLevel">0%</div>
+            </div>
+            <div class="status-card">
+                <h3>Mesh Routes</h3>
+                <div class="status-value" id="routeCount">0</div>
+            </div>
+            <div class="status-card">
+                <h3>Connected Clients</h3>
+                <div class="status-value" id="clientCount">0</div>
+            </div>
+            <div class="status-card">
+                <h3>Mesh Status</h3>
+                <div class="status-value" id="meshStatus">OFF</div>
+            </div>
+            <div class="status-card">
+                <h3>Communication Mode</h3>
+                <div class="status-value" id="communicationMode">MESH</div>
+            </div>
+            <div class="status-card">
+                <h3>Battery Voltage</h3>
+                <div class="status-value" id="batteryVoltage">0.00V</div>
+            </div>
+        </div>
+
+        <div class="message-panel">
+            <h3>Send Message</h3>
+            <div class="message-form">
+                <input type="text" class="message-input" id="messageInput" placeholder="Type your message here...">
+                <button class="send-button" onclick="sendMessage()">Send</button>
+            </div>
+            
+            <h3>Message History</h3>
+            <div class="message-history" id="messageHistory">
+                <div class="message-item">
+                    <div class="message-time">System</div>
+                    <div class="message-content">Waiting for messages...</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="control-panel">
+            <button class="control-button" onclick="refreshStatus()">Refresh Status</button>
+            <button class="control-button" onclick="clearMessages()">Clear Messages</button>
+            <button class="control-button" onclick="testConnection()">Test Connection</button>
+            <button class="control-button danger" onclick="restartSystem()">Restart System</button>
+        </div>
+
+        <div class="control-panel">
+            <h3>Communication Mode</h3>
+            <button class="control-button" onclick="setMode('mesh')" id="meshModeBtn">Mesh Mode</button>
+            <button class="control-button" onclick="setMode('direct')" id="directModeBtn">Direct Mode</button>
+            <button class="control-button" onclick="setMode('auto')" id="autoModeBtn">Auto Mode</button>
+        </div>
+
+        <div class="loading" id="loading">
+            Processing...
+        </div>
+    </div>
+
+    <script>
+        let nodeId = '';
+        let isConnected = false;
+
+        // Initialize connection
+        function init() {
+            refreshStatus();
+            setInterval(refreshStatus, 5000); // Refresh every 5 seconds
+        }
+
+        // Send message function
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (message === '') {
+                alert('Please enter a message');
+                return;
+            }
+
+            showLoading(true);
+            
+            fetch('/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'message=' + encodeURIComponent(message)
+            })
+            .then(response => {
+                showLoading(false);
+                if (response.ok) {
+                    input.value = '';
+                    addMessageToHistory('You', message, new Date());
+                } else {
+                    alert('Failed to send message');
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                console.error('Error:', error);
+                alert('Connection error');
+            });
+        }
+
+        // Refresh system status
+        function refreshStatus() {
+            fetch('/status')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('nodeId').textContent = data.nodeId || 'Unknown';
+                document.getElementById('batteryLevel').textContent = (data.batteryPercentage || 0) + '%';
+                document.getElementById('batteryVoltage').textContent = (data.batteryVoltage || 0).toFixed(2) + 'V';
+                document.getElementById('routeCount').textContent = data.routeCount || '0';
+                document.getElementById('clientCount').textContent = data.clientCount || '0';
+                document.getElementById('meshStatus').textContent = data.meshActive ? 'ON' : 'OFF';
+                document.getElementById('communicationMode').textContent = data.communicationMode || 'UNKNOWN';
+                
+                // Change battery level color based on percentage
+                const batteryLevelElement = document.getElementById('batteryLevel');
+                const batteryPercentage = data.batteryPercentage || 0;
+                if (batteryPercentage < 20) {
+                    batteryLevelElement.style.color = '#dc3545'; // Red for low battery
+                } else if (batteryPercentage < 50) {
+                    batteryLevelElement.style.color = '#ffc107'; // Yellow for medium battery
+                } else {
+                    batteryLevelElement.style.color = '#28a745'; // Green for good battery
+                }
+                
+                if (data.nodeId) {
+                    nodeId = data.nodeId;
+                    isConnected = true;
+                }
+            })
+            .catch(error => {
+                console.error('Status fetch error:', error);
+                isConnected = false;
+            });
+        }
+
+        // Clear message history
+        function clearMessages() {
+            document.getElementById('messageHistory').innerHTML = 
+                '<div class="message-item"><div class="message-time">System</div><div class="message-content">Message history cleared</div></div>';
+        }
+
+        // Test connection
+        function testConnection() {
+            showLoading(true);
+            fetch('/test')
+            .then(response => {
+                showLoading(false);
+                if (response.ok) {
+                    alert('Connection test successful!');
+                } else {
+                    alert('Connection test failed');
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                alert('Connection test failed: ' + error.message);
+            });
+        }
+
+        // Restart system
+        function restartSystem() {
+            if (confirm('Are you sure you want to restart the system?')) {
+                showLoading(true);
+                fetch('/restart', { method: 'POST' })
+                .then(response => {
+                    showLoading(false);
+                    alert('System restart initiated');
+                })
+                .catch(error => {
+                    showLoading(false);
+                    alert('Restart command failed');
+                });
+            }
+        }
+
+        // Add message to history
+        function addMessageToHistory(sender, message, timestamp) {
+            const history = document.getElementById('messageHistory');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message-item';
+            
+            const timeStr = timestamp.toLocaleTimeString();
+            messageDiv.innerHTML = `
+                <div class="message-time">${sender} - ${timeStr}</div>
+                <div class="message-content">${message}</div>
+            `;
+            
+            history.appendChild(messageDiv);
+            history.scrollTop = history.scrollHeight;
+        }
+
+        // Show/hide loading indicator
+        function showLoading(show) {
+            document.getElementById('loading').style.display = show ? 'block' : 'none';
+        }
+
+        // Set communication mode
+        function setMode(mode) {
+            showLoading(true);
+            
+            fetch('/mode', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                },
+                body: 'mode=' + mode
+            })
+            .then(response => {
+                showLoading(false);
+                if (response.ok) {
+                    alert('Communication mode changed to: ' + mode.toUpperCase());
+                    refreshStatus(); // Refresh to show new mode
+                } else {
+                    alert('Failed to change mode');
+                }
+            })
+            .catch(error => {
+                showLoading(false);
+                console.error('Error:', error);
+                alert('Connection error');
+            });
+        }
+
+        // Handle Enter key in message input
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

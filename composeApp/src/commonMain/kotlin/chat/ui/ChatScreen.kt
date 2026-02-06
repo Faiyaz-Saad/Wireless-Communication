@@ -16,8 +16,8 @@ import chat.model.Envelope
 import chat.transport.ChatTransport
 import kotlinx.coroutines.launch
 import org.jetbrains.compose.resources.painterResource
-import productpurchasing.composeapp.generated.resources.Res
-import productpurchasing.composeapp.generated.resources.chat_bg
+import wcwi.composeapp.generated.resources.Res
+import wcwi.composeapp.generated.resources.chat_bg
 import org.jetbrains.compose.resources.ExperimentalResourceApi
 import java.util.Base64
 
@@ -58,7 +58,7 @@ fun ChatScreen(transport: ChatTransport, me: String, onPickImage: suspend () -> 
                     Column(Modifier.fillMaxWidth().padding(4.dp)) {
                         Text(
                             "${m.from} • ${
-                                java.text.SimpleDateFormat("HH:mm:ss")
+                                java.text.SimpleDateFormat("hh:mm:ss a")
                                     .format(java.util.Date(m.timestamp))
                             }"
                         )

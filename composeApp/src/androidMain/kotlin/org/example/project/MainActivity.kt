@@ -58,7 +58,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-<<<<<<< HEAD
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -1489,7 +1488,6 @@ class MainActivity : ComponentActivity() {
 
 // Simple chat screen that doesn't use the complex transport system
 @OptIn(ExperimentalMaterial3Api::class)
-=======
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.LaunchedEffect
 
@@ -1507,14 +1505,11 @@ class MainActivity : ComponentActivity() {
 }
 private var globalMessages = mutableListOf<String>()
 private var onMessageReceived: ((String) -> Unit)? = null
-
->>>>>>> d9dbfd198ba192eecaffd4eee5d824ca2969ba37
 @Composable
 fun SimpleChatScreen(
     isServer: Boolean,
     serverIp: String,
     serverPort: Int,
-<<<<<<< HEAD
     connectionMode: String,
     bluetoothManager: BluetoothManager,
     storageManager: MessageStorageManager,
@@ -1870,7 +1865,6 @@ fun SimpleChatScreen(
                     }
                 }
                 }
-=======
     onSendMessage: (String) -> Unit
 ) {
     var messages by remember { mutableStateOf(globalMessages.toList()) }
@@ -1902,26 +1896,21 @@ fun SimpleChatScreen(
                         .fillMaxWidth()
                         .padding(vertical = 4.dp)
                 )
->>>>>>> d9dbfd198ba192eecaffd4eee5d824ca2969ba37
             }
         }
         
         // Input area
         Row(
-<<<<<<< HEAD
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(bottom = 35.dp), //15
             verticalAlignment = Alignment.CenterVertically,
-=======
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
->>>>>>> d9dbfd198ba192eecaffd4eee5d824ca2969ba37
         ) {
             TextField(
                 value = inputText,
                 onValueChange = { inputText = it },
-<<<<<<< HEAD
                 placeholder = { Text("Type message...", color = Color.White)},
                 modifier = Modifier
                     .weight(1f),
@@ -2213,7 +2202,7 @@ fun SimpleChatScreen(
         }
     }
 }
-
+//
 //@Preview
 //@Composable
 //fun AppAndroidPreview() {
@@ -2221,24 +2210,22 @@ fun SimpleChatScreen(
 //    // This is just for UI preview purposes
 //    Text("Preview not available for Bluetooth functionality")
 //}
-=======
-                label = { Text("Type message...") },
-                modifier = Modifier.weight(1f)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Button(
-                onClick = {
-                    if (inputText.isNotBlank()) {
-                        val newMessage = "${if (isServer) "Server" else "Client"}: $inputText"
-                        globalMessages.add(newMessage)
-                        messages = globalMessages.toList()
-                        onSendMessage(inputText) // Send the message to other device
-                        inputText = ""
-                }
-            ) {
-                Text("Send")
-            }
-        }
-    }
-}
->>>>>>> d9dbfd198ba192eecaffd4eee5d824ca2969ba37
+//                label = { Text("Type message...") },
+//                modifier = Modifier.weight(1f)
+//            )
+//            Spacer(modifier = Modifier.width(8.dp))
+//            Button(
+//                onClick = {
+//                    if (inputText.isNotBlank()) {
+//                        val newMessage = "${if (isServer) "Server" else "Client"}: $inputText"
+//                        globalMessages.add(newMessage)
+//                        messages = globalMessages.toList()
+//                        onSendMessage(inputText) // Send the message to other device
+//                        inputText = ""
+//                }
+//            ) {
+//                Text("Send")
+//            }
+//        }
+//    }
+//}
